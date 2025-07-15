@@ -1,5 +1,9 @@
 package com.scaler.userauthservice.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.scaler.userauthservice.clients.KafkaClient;
+import com.scaler.userauthservice.dtos.EmailDto;
 import com.scaler.userauthservice.exceptions.AccountSuspendedException;
 import com.scaler.userauthservice.exceptions.PasswordMismatchException;
 import com.scaler.userauthservice.exceptions.UserAlreadySignedException;
@@ -38,7 +42,13 @@ public class AuthService {
     @Autowired
     private SecretKey secretKey;
 
-    public User signUp(String name, String email, String password){
+    @Autowired
+    private KafkaClient kafkaClient;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    public User signUp(String name, String email, String password) {
         Optional<User> optionalUser = userRepository.findByEmail(email);
         if(optionalUser.isPresent()){
             throw new UserAlreadySignedException("User already exists please try login directly!");
@@ -48,6 +58,20 @@ public class AuthService {
         user.setEmail(email);
         user.setPassword(bCryptPasswordEncoder.encode(password));
         userRepository.save(user);
+
+        //We will add logic to send welcome email at this place
+        EmailDto emailDto = new EmailDto();
+        emailDto.setFrom("saibhimewar788@gmail.com");
+        emailDto.setTo(email);
+        emailDto.setBody("Welcome to Scaler");
+        emailDto.setSubject("Hope youn will have , good learning experience");
+        String emailMessageString=null;
+        try{
+            emailMessageString=objectMapper.writeValueAsString(emailDto);
+        }catch (JsonProcessingException e){
+            throw new RuntimeException("Something went wrong");
+        }
+        kafkaClient.sendEmail("signup", emailMessageString);
         return user;
     }
 
